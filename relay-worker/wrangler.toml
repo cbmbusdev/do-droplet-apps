@@ -6,7 +6,7 @@ compatibility_date = "2026-11-01"
 # subscription. With more than one account, wrangler needs to know which:
 # paste its id (Cloudflare dashboard → Workers & Pages → Account ID, or
 # `npx wrangler whoami`).
-# account_id = ""
+account_id = "87718534e46dcb3756a962702054df15"  # Affiliate@crystalballmarkets.com's Account (Workers Paid)
 
 # Every minute: read @EN4XC's public web preview for new signals.
 # 03:17 UTC run also prunes bookkeeping older than 30 days.
@@ -17,7 +17,7 @@ crons = ["* * * * *"]
 binding = "DB"
 database_name = "fti_relay"
 # Replace with the id printed by:  npx wrangler d1 create fti_relay
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "6cb31966-59d2-4aed-9f39-d10c53c1e218"
 migrations_dir = "migrations"
 
 # One message per (post, channel). Retries honour Telegram's retry_after.

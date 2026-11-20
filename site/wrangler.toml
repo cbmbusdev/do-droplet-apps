@@ -2,6 +2,7 @@
 # Static files only — no Worker code runs.
 name = "fti-linktree"
 compatibility_date = "2026-11-01"
+account_id = "87718534e46dcb3756a962702054df15"
 
 [assets]
 directory = "./public"

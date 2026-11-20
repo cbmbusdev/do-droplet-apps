@@ -4,7 +4,7 @@ import { type Config, type Env, type SendJob, loadConfig } from './config';
 import { claimSend, markSent, releaseSend } from './db';
 import { log } from './log';
 import { planFreemiumForward } from './planner';
-import { escapeHtml, finishTranslatedHtml, htmlToPlain } from './signals';
+import { buildTranslatedHtml, escapeHtml, htmlToPlain } from './signals';
 import {
   type SentMessage,
   Telegram,
@@ -12,7 +12,8 @@ import {
   TelegramPermanentError,
   TelegramRetryAfter,
 } from './telegram';
-import { translate } from './translate';
+import { googleTranslateBatch } from './translate';
+import { type LinesResult, translateLines } from './translation';
 
 const CAPTION_LIMIT = 1024;
 const TEXT_LIMIT = 4096;
@@ -26,7 +27,8 @@ export type Outcome =
 
 export interface Deps {
   tg: Telegram;
-  translate: (text: string, target: string, format: 'html' | 'text') => Promise<string>;
+  /** Line-cached, budget-capped translation (see translation.ts). */
+  translateLines: (lines: string[], target: string) => Promise<LinesResult>;
   db: D1Database;
   enqueue: (job: SendJob) => Promise<void>;
   now: () => number;
@@ -48,7 +50,11 @@ async function deliver(deps: Deps, cfg: Config, job: SendJob): Promise<SentMessa
 
   if (job.kind === 'text') {
     let html = job.html ?? '';
-    if (job.translateTo) html = finishTranslatedHtml(await deps.translate(html, job.translateTo, 'html'));
+    if (job.translateTo) {
+      const english = (job.text ?? '').split('\n');
+      const { lines } = await deps.translateLines(english, job.translateTo);
+      html = buildTranslatedHtml(english, lines, job.link ?? null);
+    }
     if (redirect) html = `<i>${escapeHtml(testBanner(job))}</i>\n\n${html}`;
     try {
       return await deps.tg.sendHtml(chat, html.slice(0, TEXT_LIMIT));
@@ -61,7 +67,9 @@ async function deliver(deps: Deps, cfg: Config, job: SendJob): Promise<SentMessa
   }
 
   let caption = job.caption ?? '';
-  if (job.translateTo && caption.trim()) caption = await deps.translate(caption, job.translateTo, 'text');
+  if (job.translateTo && caption.trim()) {
+    caption = (await deps.translateLines(caption.split('\n'), job.translateTo)).lines.join('\n');
+  }
   if (redirect) caption = `${testBanner(job)}\n\n${caption}`;
   return deps.tg.sendMedia(job.kind, chat, job.fileId as string, caption.slice(0, CAPTION_LIMIT) || undefined);
 }
@@ -125,7 +133,32 @@ export async function handleQueueBatch(batch: MessageBatch<SendJob>, env: Env): 
   const cfg = loadConfig(env);
   const deps: Deps = {
     tg: new Telegram(env.TELEGRAM_BOT_TOKEN),
-    translate: (text, target, format) => translate(env.GOOGLE_TRANSLATE_API_KEY, text, target, format),
+    translateLines: (lines, target) =>
+      translateLines(
+        {
+          db: env.DB,
+          google: (texts, lang) => googleTranslateBatch(env.GOOGLE_TRANSLATE_API_KEY, texts, lang),
+          budget: cfg.translateMonthlyCharBudget,
+          now: () => Date.now(),
+          onBudgetExhausted: async (month, lang, lines) => {
+            log('warn', 'translate_budget_exhausted', { month, lang, lines, budget: cfg.translateMonthlyCharBudget });
+            // One alert per month, not one per post.
+            const first = await env.DB.prepare('INSERT OR IGNORE INTO kv (k, v) VALUES (?1, ?2)')
+              .bind(`budget_alert:${month}`, String(Date.now()))
+              .run();
+            if ((first.meta.changes ?? 0) > 0) {
+              await alert(
+                env,
+                cfg,
+                `Google translation budget for ${month} (${cfg.translateMonthlyCharBudget} chars) is used up. ` +
+                  'Lines not yet in the translation cache will stay in English until next month.',
+              );
+            }
+          },
+        },
+        lines,
+        target,
+      ),
     db: env.DB,
     enqueue: async (job) => {
       await env.SEND_QUEUE.send(job);

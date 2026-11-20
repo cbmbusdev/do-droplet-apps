@@ -28,6 +28,7 @@ freemium "once a day" limit lives there too, so restarts don't reset it.
 
 ## Behaviour changes from the Droplet bots
 
+- **Translation is line by line, from a cache.** Each sentence is translated once per language and reused, so the same English sentence always gets the same translation.
 - **Only signals rated 3★ or higher are forwarded** (`MIN_CONFIDENCE_STARS = "3"`). 1★/2★ and unrated signals are dropped before translation; the logs show them as `signal_filtered`. The old bots forwarded every rating.
 - **@EN4XC is read from its public web page** (`https://t.me/s/EN4XC`), as the bot isn't an admin there. New signals appear within about a minute; the old userbot was instant. If the owner adds the bot as an admin (all permissions can be off), set `SIGNAL_SOURCE_MODE = "bot"` for instant delivery.
 - **Media without a caption is now forwarded.** The old media bots tried to translate an empty caption, failed, and silently dropped the post.
@@ -164,10 +165,41 @@ day. They stay far inside the plan's included amounts, unless the other
 Workers in that account already use most of them. You can check under
 **Workers & Pages → Plans/Usage** in the dashboard.
 
-**Google Translation:** the first 500,000 characters a month are free,
-then $20 per million. With only 3★+ signals forwarded, a signal is about
-600 characters × 19 languages, so roughly 40 signals a day stays inside
-the free tier.
+**Google Translation stays inside the free 500,000 characters/month, guaranteed:**
+
+1. **Line cache.** @EN4XC's signals reuse the same sentences with
+   different prices and symbols. Each line is stored with its
+   numbers/symbols masked (`We look to Sell at {{0}}`) and translated
+   once per language, ever. Replaying two weeks of real @EN4XC history
+   (220 signals at 3★+): ~22-55k characters/day in the first week while
+   the cache fills, then **~10k/day**, about **226k a month**. Without
+   the cache it would be ~4 million a month.
+2. **Hard cap in the Worker.** Before every Google call, the Worker
+   reserves the request's characters against
+   `TRANSLATE_MONTHLY_CHAR_BUDGET` (450,000) in D1, atomically. If a
+   call would go over, it isn't made: sentences not yet cached stay in
+   English until the next month, and one alert is sent. Cached
+   sentences keep translating.
+3. **Cap at Google too (belt and braces).** In Google Cloud Console →
+   **IAM & Admin → Quotas**, filter for *Cloud Translation API*, select
+   *v2 and v3 general model characters per day*, and **Edit quota** to
+   `40000`. That allows a busy first week, while 40,000 × 31 days alone
+   could exceed 500k, so the Worker's monthly cap stays the real limit.
+   Also add a **Billing → Budgets & alerts** budget of $1 to be emailed
+   if anything is ever charged.
+
+To see this month's usage:
+
+```bash
+npx wrangler d1 execute fti_relay --remote --command "SELECT * FROM translate_usage"
+```
+
+If a cached translation is ever wrong, delete it and it is
+re-translated on next use, e.g.:
+
+```bash
+npx wrangler d1 execute fti_relay --remote --command "DELETE FROM translations WHERE lang = 'fr' AND src LIKE '%Bespoke%'"
+```
 
 ## Development
 

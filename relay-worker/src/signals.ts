@@ -52,32 +52,28 @@ function linkChart(escapedText: string, link: string | null): string {
   return escapedText.split(CHART_LABEL).join(`<a href="${escapeAttr(link)}">${CHART_LABEL}</a>`);
 }
 
+/** The broker's symbol suffix ("GBPUSDxx"), removed everywhere as the old bots did. */
+export function stripBrokerSuffix(text: string): string {
+  return text.split('xx').join('');
+}
+
 /** English premium post: the source text with the broker "xx" symbol suffix removed and the chart linked. */
 export function buildEnglishHtml(text: string, link: string | null): string {
-  return linkChart(escapeHtml(text.split('xx').join('')), link);
+  return linkChart(escapeHtml(stripBrokerSuffix(text)), link);
 }
 
 /**
- * HTML sent to Google Translate. Instrument symbols ("GBPUSDxx") are
- * wrapped in translate="no" so they come back untouched, and line breaks
- * become <br> because HTML mode would otherwise collapse them.
+ * Translated premium post from English lines and their translations
+ * (same length, same order). The line that reads "Market Chart" in
+ * English becomes the link, whatever the translation says.
  */
-export function buildTranslationSourceHtml(text: string, link: string | null): string {
-  let html = escapeHtml(text).replace(/\b([A-Z0-9]{3,12})xx\b/g, '<span translate="no">$1</span>');
-  html = html.split('xx').join('');
-  html = linkChart(html, link);
-  return html.replace(/\n/g, '<br>');
-}
-
-/** Turn Google's HTML output back into Telegram-HTML. */
-export function finishTranslatedHtml(translated: string): string {
+export function buildTranslatedHtml(english: string[], translated: string[], link: string | null): string {
   return translated
-    .replace(/\s*<br\s*\/?>\s?/gi, '\n')
-    .replace(/<span[^>]*>/gi, '')
-    .replace(/<\/span>/gi, '')
-    .split('xx').join('')
-    .split('хх').join('') // Cyrillic "хх", as stripped by the old bot
-    .replace(/[ \t]+\n/g, '\n')
+    .map((line, i) => {
+      if (link && english[i].trim() === CHART_LABEL) return `<a href="${escapeAttr(link)}">${escapeHtml(line.trim())}</a>`;
+      return escapeHtml(line);
+    })
+    .join('\n')
     .trim();
 }
 

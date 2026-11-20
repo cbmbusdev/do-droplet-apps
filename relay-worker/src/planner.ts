@@ -18,7 +18,7 @@ import {
   dayKey,
   languageByPremiumChat,
 } from './config';
-import { buildEnglishHtml, buildTranslationSourceHtml, confidenceStars, isSignal } from './signals';
+import { buildEnglishHtml, confidenceStars, isSignal, stripBrokerSuffix } from './signals';
 import type { TgChannelPost } from './telegram';
 
 function modeOf(cfg: Config, flow: Flow): 'test' | 'live' | null {
@@ -61,8 +61,9 @@ export function planSignal(
     lang: l.key,
     target: l.premium,
     kind: 'text' as const,
-    html: l.code ? buildTranslationSourceHtml(text, link) : buildEnglishHtml(text, link),
-    ...(l.code ? { translateTo: l.code } : {}),
+    ...(l.code
+      ? { text: stripBrokerSuffix(text), link, translateTo: l.code }
+      : { html: buildEnglishHtml(text, link) }),
     ...(freemiumOn ? { freemiumLang: l.key } : {}),
   }));
 }

@@ -4,12 +4,15 @@ import { readFileSync } from 'node:fs';
 import { type Env, type SendJob, loadConfig } from '../src/config';
 import { type Deps, processJob } from '../src/consumer';
 import { STALE_CLAIM_MS } from '../src/db';
+import { translateLines } from '../src/translation';
 import worker, { handleWebhook, pollSignalWeb } from '../src/index';
 import { planSignal } from '../src/planner';
 import { Telegram, TelegramParseError, TelegramPermanentError, TelegramRetryAfter } from '../src/telegram';
 import { sqliteD1 } from './helpers/sqlite-d1';
 
-const schema = readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8');
+const schema = ['0001_init.sql', '0002_translation_cache.sql']
+  .map((f) => readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8'))
+  .join('\n');
 
 function freshDb() {
   const h = sqliteD1();
@@ -56,10 +59,25 @@ function setup(vars: Partial<Env> = {}) {
   const tg = new FakeTelegram();
   const queued: SendJob[] = [];
   let now = Date.parse('2026-11-20T12:00:00Z');
+  const google = { calls: 0, chars: 0 };
   const deps: Deps = {
     tg,
     db,
-    translate: async (text, target) => `[${target}] ${text}`,
+    translateLines: (lines, target) =>
+      translateLines(
+        {
+          db,
+          budget: 450_000,
+          now: () => now,
+          google: async (texts, lang) => {
+            google.calls += 1;
+            google.chars += texts.join('').length;
+            return texts.map((t) => `[${lang}] ${t}`);
+          },
+        },
+        lines,
+        target,
+      ),
     enqueue: async (j) => {
       queued.push(j);
     },
@@ -73,7 +91,7 @@ function setup(vars: Partial<Env> = {}) {
     FLOW_FREEMIUM: 'live',
     ...vars,
   } as Env);
-  return { db, tg, queued, deps, cfg, advance: (ms: number) => (now += ms) };
+  return { db, tg, queued, deps, cfg, google, advance: (ms: number) => (now += ms) };
 }
 
 const SIGNAL = '📉 [Sell Limit] GBPUSDxx - Bearish\nConfidence: ⭐⭐⭐\nMarket Chart';
@@ -85,7 +103,10 @@ test('a live translated signal is sent to the real premium channel', async () =>
   const out = await processJob(s.deps, s.cfg, signalJob(s.cfg, 'fr'), 1);
   assert.equal(out.kind, 'sent');
   assert.equal(s.tg.calls[0].chat, -1001727546393);
-  assert.ok(s.tg.calls[0].body.startsWith('[fr] 📉 [Sell Limit] GBPUSD - Bearish\nConfidence: ⭐⭐⭐\n<a href="https://c.example/a.png">'));
+  assert.equal(
+    s.tg.calls[0].body,
+    '📉 [fr] [Sell Limit] GBPUSD - Bearish\n[fr] Confidence: ⭐⭐⭐\n<a href="https://c.example/a.png">[fr] Market Chart</a>',
+  );
 });
 
 test('test mode redirects to TEST_CHAT_ID with a banner naming the real target', async () => {
@@ -275,4 +296,20 @@ test('web polling skips a 2-star signal but still moves past it', async () => {
   assert.equal(await pollSignalWeb(env, twoStar), 0);
   assert.equal(batches.length, 0);
   assert.equal(await db.prepare('SELECT v FROM kv').first('v'), '102');
+});
+
+test('the second signal with the same wording costs no Google characters', async () => {
+  const s = setup();
+  await processJob(s.deps, s.cfg, signalJob(s.cfg, 'de'), 1);
+  const charsAfterFirst = s.google.chars;
+  assert.ok(charsAfterFirst > 0);
+  // Same lines, different symbol, price and rating -> fully cached.
+  const other = planSignal(s.cfg, 'EN4XC/9', '📈 [Sell Limit] EURJPYxx - Bearish\nConfidence: ⭐⭐⭐⭐\nMarket Chart', 'https://c.example/b.png')
+    .find((j) => j.lang === 'de')!;
+  await processJob(s.deps, s.cfg, other, 1);
+  assert.equal(s.google.chars, charsAfterFirst);
+  assert.equal(
+    s.tg.calls[1].body,
+    '📈 [de] [Sell Limit] EURJPY - Bearish\n[de] Confidence: ⭐⭐⭐⭐\n<a href="https://c.example/b.png">[de] Market Chart</a>',
+  );
 });

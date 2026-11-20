@@ -4,8 +4,6 @@ import { readFileSync } from 'node:fs';
 import { parseChannelPage } from '../src/sources/channel-web';
 import {
   buildEnglishHtml,
-  buildTranslationSourceHtml,
-  finishTranslatedHtml,
   htmlToPlain,
   isSignal,
 } from '../src/signals';
@@ -51,25 +49,6 @@ test('English post: strips the xx suffix, escapes HTML, links Market Chart', () 
 
 test('English post without a link keeps the plain label', () => {
   assert.equal(buildEnglishHtml('[Live Trade] XAUUSDxx\nMarket Chart', null), '[Live Trade] XAUUSD\nMarket Chart');
-});
-
-test('translation source protects symbols, keeps the link as a tag, and encodes line breaks', () => {
-  const html = buildTranslationSourceHtml('📉 [Sell Limit] GBPUSDxx - Bearish\nMarket Chart', 'https://c.example/a.png');
-  assert.equal(
-    html,
-    '📉 [Sell Limit] <span translate="no">GBPUSD</span> - Bearish<br><a href="https://c.example/a.png">Market Chart</a>',
-  );
-});
-
-test('translated HTML is turned back into Telegram HTML', () => {
-  const google =
-    '📉 [Limite de vente] <span translate="no">GBPUSD</span> - Baissier <br> Arrêt : 1,3161 <br><br> <a href="https://c.example/a.png">Graphique du marché</a>';
-  assert.equal(
-    finishTranslatedHtml(google),
-    '📉 [Limite de vente] GBPUSD - Baissier\nArrêt : 1,3161\n\n<a href="https://c.example/a.png">Graphique du marché</a>',
-  );
-  // Leftover broker suffixes in Latin or Cyrillic are dropped, as the old bot did.
-  assert.equal(finishTranslatedHtml('EURUSDxx и EURUSDхх'), 'EURUSD и EURUSD');
 });
 
 test('plain-text fallback strips tags and decodes entities', () => {

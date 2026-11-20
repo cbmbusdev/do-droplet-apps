@@ -72,6 +72,7 @@ export interface Env {
   MEDIA_PUBLIC_SOURCE_USERNAME?: string;
   FREEMIUM_DAY_UTC_OFFSET_HOURS?: string;
   MIN_CONFIDENCE_STARS?: string;
+  TRANSLATE_MONTHLY_CHAR_BUDGET?: string;
 }
 
 export interface Config {
@@ -85,6 +86,8 @@ export interface Config {
   freemiumDayOffsetHours: number;
   /** Signals rated below this (or unrated) are not forwarded. 0 = forward all. */
   minConfidenceStars: number;
+  /** Hard cap on characters sent to Google per billing month. */
+  translateMonthlyCharBudget: number;
 }
 
 function parseMode(raw: string | undefined): FlowMode {
@@ -97,6 +100,9 @@ function parseChatId(raw: string | undefined): number | null {
   const n = Number(raw.trim());
   return Number.isSafeInteger(n) ? n : null;
 }
+
+/** 10% under Google's 500k free characters/month, leaving room for month-boundary timing. */
+export const DEFAULT_TRANSLATE_BUDGET = 450_000;
 
 export function loadConfig(env: Env): Config {
   const modes: Record<Flow, FlowMode> = {
@@ -113,6 +119,7 @@ export function loadConfig(env: Env): Config {
   }
   const offset = Number(env.FREEMIUM_DAY_UTC_OFFSET_HOURS ?? '1');
   const minStars = Number(env.MIN_CONFIDENCE_STARS ?? '3');
+  const budget = Number(env.TRANSLATE_MONTHLY_CHAR_BUDGET ?? String(DEFAULT_TRANSLATE_BUDGET));
   return {
     modes,
     testChatId,
@@ -124,6 +131,9 @@ export function loadConfig(env: Env): Config {
     freemiumDayOffsetHours: Number.isFinite(offset) ? offset : 1,
     // A typo must not silently open the filter: anything unparseable means 3.
     minConfidenceStars: Number.isFinite(minStars) && minStars >= 0 ? minStars : 3,
+    // Unparseable → the safe default, never "unlimited".
+    translateMonthlyCharBudget:
+      Number.isFinite(budget) && budget >= 0 ? Math.floor(budget) : DEFAULT_TRANSLATE_BUDGET,
   };
 }
 
@@ -144,8 +154,11 @@ export interface SendJob {
   /** Real destination; in test mode the consumer redirects to TEST_CHAT_ID. */
   target: number | string;
   kind: 'text' | MediaKind | 'forward';
-  /** kind=text: Telegram-HTML body. Translated first when translateTo is set. */
+  /** kind=text, untranslated: ready Telegram-HTML body. */
   html?: string;
+  /** kind=text, translated: the English signal text ("xx" already stripped) and its chart link. */
+  text?: string;
+  link?: string | null;
   /** Media: caption (plain text). */
   caption?: string;
   fileId?: string;

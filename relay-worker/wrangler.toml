@@ -66,6 +66,13 @@ SIGNAL_SOURCE_CHAT_ID = ""
 # they cost nothing. "0" forwards every signal.
 MIN_CONFIDENCE_STARS = "3"
 
+# Hard cap on characters sent to Google Translate per billing month
+# (US Pacific calendar month). Google's free tier is 500,000; this stays
+# 10% under it. Lines are cached, so each sentence is paid for once per
+# language; when the cap is reached, sentences not yet cached stay in
+# English until the next month and an alert is sent. Nothing is billed.
+TRANSLATE_MONTHLY_CHAR_BUDGET = "450000"
+
 # Public channel whose media is translated out to the 19 public language channels.
 MEDIA_PUBLIC_SOURCE_USERNAME = "freemiumtradeideas"
 

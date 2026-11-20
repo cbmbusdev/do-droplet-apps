@@ -1,0 +1,8 @@
+# Never commit Telegram logins, secrets or archives
+*.session
+*.session-journal
+.env
+.env.*
+*.zip
+__pycache__/
+*.log

@@ -1,0 +1,14 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pyrogram = "*"
+tgcrypto = "*"
+googletrans = {ref = "c27ecefe23376827904ba8cf866c49735bb860ad", git = "git+https://github.com/NasirHossainAkash/py-googletrans"}
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"

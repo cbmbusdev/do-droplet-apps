@@ -1,0 +1,16 @@
+anyio==3.7.0
+certifi==2023.5.7
+exceptiongroup==1.1.1
+googletrans @ git+https://github.com/NasirHossainAkash/py-googletrans@c27ecefe23376827904ba8cf866c49735bb860ad
+h11==0.14.0
+h2==4.1.0
+hpack==4.0.0
+httpcore==0.17.2
+httpx==0.24.1
+hyperframe==6.0.1
+idna==3.4
+pyaes==1.6.1
+Pyrogram==2.0.106
+PySocks==1.7.1
+sniffio==1.3.0
+TgCrypto==1.2.5

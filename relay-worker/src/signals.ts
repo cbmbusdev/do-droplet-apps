@@ -12,6 +12,19 @@ export function isSignal(text: string | null | undefined): boolean {
   return !!text && SIGNAL_PATTERN.test(text);
 }
 
+/**
+ * The provider's rating from a "Confidence: ⭐⭐⭐" line, or null when the
+ * post has none. Counts the same star characters as the FTI trading
+ * worker's parser, so both apply the same threshold to the same post.
+ */
+export function confidenceStars(text: string): number | null {
+  for (const line of text.split('\n')) {
+    const m = /\bconfidence\b\s*[:\-]?\s*(.+)$/i.exec(line);
+    if (m) return (m[1].match(/[★⭐✩✰]/gu) ?? []).length;
+  }
+  return null;
+}
+
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

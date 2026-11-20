@@ -8,7 +8,7 @@ import { type Env, type SendJob, loadConfig } from './config';
 import { handleQueueBatch } from './consumer';
 import { claimPost, getKv, pruneOld, setKv } from './db';
 import { log } from './log';
-import { planChannelPost, planSignal } from './planner';
+import { planChannelPost, planSignal, signalRejection } from './planner';
 import { fetchChannelPage, parseChannelPage } from './sources/channel-web';
 import type { TgUpdate } from './telegram';
 
@@ -104,6 +104,8 @@ export async function pollSignalWeb(env: Env, html?: string): Promise<number> {
   for (const p of posts.filter((x) => x.id > last)) {
     const sourceKey = `${username}/${p.id}`;
     const jobs = planSignal(cfg, sourceKey, p.text, p.link);
+    const rejected = signalRejection(cfg, p.text);
+    if (rejected && rejected !== 'not_a_signal') log('info', 'signal_filtered', { source: sourceKey, reason: rejected });
     // Throws (leaving the cursor before this post) if queueing fails.
     if (jobs.length > 0 && (await claimAndEnqueue(env, `web:${sourceKey}`, jobs, now))) {
       queued += 1;

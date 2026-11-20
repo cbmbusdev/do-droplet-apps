@@ -6,7 +6,7 @@ account) plus Google Cloud Translation.
 
 | Flow (`FLOW_*` switch) | Replaces container(s) | What it does |
 |---|---|---|
-| `FLOW_SIGNALS` | `bold_faraday`, `goofy_roentgen` (updated_app1)<br>`affectionate_merkle`, `admiring_goldwasser` (updated_app2) | New signal posts in **@EN4XC** (Live Trade / Buy Limit / Buy Stop / Sell Limit / Sell Stop) → English + French premium channels always; the other 18 premium channels (translated) when the post has a "Market Chart" link |
+| `FLOW_SIGNALS` | `bold_faraday`, `goofy_roentgen` (updated_app1)<br>`affectionate_merkle`, `admiring_goldwasser` (updated_app2) | New signal posts in **@EN4XC** (Live Trade / Buy Limit / Buy Stop / Sell Limit / Sell Stop) rated **3★ or more** (`MIN_CONFIDENCE_STARS`) → English + French premium channels always; the other 18 premium channels (translated) when the post has a "Market Chart" link |
 | `FLOW_MEDIA_PRIVATE` | `xenodochial_carver` (media_forward_private) | Photo/video/document in the English premium channel → the 19 other premium channels, caption translated |
 | `FLOW_MEDIA_PUBLIC` | `brave_greider` (media_forward) | Photo/video/document in **@freemiumtradeideas** → the 19 public `@freemiumtradeideasXX` channels, caption translated |
 | `FLOW_FREEMIUM` | `brave_banzai` (freemium) | First text post of the day in each premium channel → forwarded to that language's public channel |
@@ -28,6 +28,7 @@ freemium "once a day" limit lives there too, so restarts don't reset it.
 
 ## Behaviour changes from the Droplet bots
 
+- **Only signals rated 3★ or higher are forwarded** (`MIN_CONFIDENCE_STARS = "3"`). 1★/2★ and unrated signals are dropped before translation; the logs show them as `signal_filtered`. The old bots forwarded every rating.
 - **@EN4XC is read from its public web page** (`https://t.me/s/EN4XC`), as the bot isn't an admin there. New signals appear within about a minute; the old userbot was instant. If the owner adds the bot as an admin (all permissions can be off), set `SIGNAL_SOURCE_MODE = "bot"` for instant delivery.
 - **Media without a caption is now forwarded.** The old media bots tried to translate an empty caption, failed, and silently dropped the post.
 - **Vietnamese freemium teaser now works.** The old freemium bot had no handler for the `vi` channel.
@@ -147,8 +148,26 @@ Worker's posts and double the teasers.
 
 ## Costs
 
-- **Cloudflare:** the Workers Paid plan ($5/month) is recommended. Each signal makes about 40 outbound requests, and Paid has comfortable headroom for that.
-- **Google Translation:** the first 500,000 characters a month are free, then $20 per million. A signal is about 600 characters × 19 languages, so roughly 40 signals a day stays inside the free tier.
+**No new Cloudflare subscription.** The Workers Paid plan is per
+account, not per Worker, so deploy into one of your two existing paid
+accounts (set `account_id` in `wrangler.toml`). This Worker's usage is
+small next to what the plan includes each month:
+
+| Resource | This Worker, per month (approx.) |
+|---|---|
+| Worker requests | ~45,000 (one cron run a minute, plus webhooks) |
+| Queue operations | ~60,000 (each post to a channel is 3 operations) |
+| D1 | a few thousand rows written, well under 1 GB stored |
+
+Those figures assume about 20 forwarded signals and a few media posts a
+day. They stay far inside the plan's included amounts, unless the other
+Workers in that account already use most of them. You can check under
+**Workers & Pages → Plans/Usage** in the dashboard.
+
+**Google Translation:** the first 500,000 characters a month are free,
+then $20 per million. With only 3★+ signals forwarded, a signal is about
+600 characters × 19 languages, so roughly 40 signals a day stays inside
+the free tier.
 
 ## Development
 

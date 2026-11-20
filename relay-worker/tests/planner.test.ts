@@ -1,14 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { type Env, LANGUAGES, dayKey, loadConfig } from '../src/config';
-import { planChannelPost, planSignal } from '../src/planner';
+import { planChannelPost, planSignal, signalRejection } from '../src/planner';
+import { confidenceStars } from '../src/signals';
 import type { TgChannelPost } from '../src/telegram';
 
 const cfg = (vars: Partial<Env> = {}) =>
   loadConfig({ TEST_CHAT_ID: '-100999', FLOW_SIGNALS: 'live', FLOW_MEDIA_PRIVATE: 'live', FLOW_MEDIA_PUBLIC: 'live', FLOW_FREEMIUM: 'live', ...vars } as Env);
 
 const NOW = Date.parse('2026-11-20T12:00:00Z');
-const SIGNAL = '📉 [Sell Limit] GBPUSDxx - Bearish\nMarket Chart';
+const SIGNAL = '📉 [Sell Limit] GBPUSDxx - Bearish\nConfidence: ⭐⭐⭐\nMarket Chart';
 
 test('a signal with a chart goes to all 20 premium channels; English untranslated', () => {
   const jobs = planSignal(cfg(), 'EN4XC/1', SIGNAL, 'https://c.example/a.png');
@@ -23,7 +24,7 @@ test('a signal with a chart goes to all 20 premium channels; English untranslate
 });
 
 test('a signal without a chart only goes to English and French (old app2 skipped it)', () => {
-  const jobs = planSignal(cfg(), 'EN4XC/2', '[Live Trade] XAUUSDxx closed', null);
+  const jobs = planSignal(cfg(), 'EN4XC/2', '[Live Trade] XAUUSDxx closed\nConfidence: ⭐⭐⭐⭐', null);
   assert.deepEqual(jobs.map((j) => j.lang).sort(), ['en', 'fr']);
 });
 
@@ -109,4 +110,41 @@ test('@EN4XC posts arriving by webhook are ignored in web mode, used in bot mode
 
 test('posts from channels we do not know are unrouted', () => {
   assert.equal(planChannelPost(cfg(), post({ chat: { id: -100123, type: 'channel' }, text: 'x' }), NOW).route, 'unrouted');
+});
+
+// ---- Confidence filter (MIN_CONFIDENCE_STARS, default 3) ----
+
+const rated = (stars: string) => `📈 [Buy Limit] EURUSDxx - Bullish\nConfidence: ${stars}\n⛔ Stop: 1.1\nMarket Chart`;
+
+test('confidence is read from the "Confidence:" line, counting the same stars as the FTI worker', () => {
+  assert.equal(confidenceStars(rated('⭐⭐⭐⭐')), 4);
+  assert.equal(confidenceStars(rated('★★')), 2);
+  assert.equal(confidenceStars('[Buy Limit] EURUSD'), null);
+});
+
+test('by default only 3-star and higher signals are forwarded', () => {
+  const c = cfg();
+  assert.equal(c.minConfidenceStars, 3);
+  assert.equal(planSignal(c, 'EN4XC/10', rated('⭐'), 'https://c').length, 0);
+  assert.equal(planSignal(c, 'EN4XC/11', rated('⭐⭐'), 'https://c').length, 0);
+  assert.equal(planSignal(c, 'EN4XC/12', rated('⭐⭐⭐'), 'https://c').length, 20);
+  assert.equal(planSignal(c, 'EN4XC/13', rated('⭐⭐⭐⭐'), 'https://c').length, 20);
+  assert.equal(planSignal(c, 'EN4XC/14', rated('⭐⭐⭐⭐⭐'), 'https://c').length, 20);
+});
+
+test('unrated signals are not forwarded while the filter is on', () => {
+  assert.equal(signalRejection(cfg(), '[Live Trade] EURUSDxx\nMarket Chart'), 'no_confidence_rating');
+  assert.equal(signalRejection(cfg(), rated('⭐⭐')), 'confidence_2_below_3');
+  assert.equal(signalRejection(cfg(), 'Weekly outlook'), 'not_a_signal');
+});
+
+test('the threshold is configurable; 0 forwards everything; junk falls back to 3', () => {
+  assert.equal(planSignal(cfg({ MIN_CONFIDENCE_STARS: '4' }), 'EN4XC/20', rated('⭐⭐⭐'), 'https://c').length, 0);
+  assert.equal(planSignal(cfg({ MIN_CONFIDENCE_STARS: '0' }), 'EN4XC/21', '[Live Trade] EURUSDxx', 'https://c').length, 20);
+  assert.equal(cfg({ MIN_CONFIDENCE_STARS: 'three' }).minConfidenceStars, 3);
+});
+
+test('signals arriving by webhook (bot mode) are filtered the same way', () => {
+  const p = post({ chat: { id: -1001908926977, username: 'EN4XC', type: 'channel' }, text: rated('⭐⭐') });
+  assert.equal(planChannelPost(cfg({ SIGNAL_SOURCE_MODE: 'bot' }), p, NOW).jobs.length, 0);
 });

@@ -71,6 +71,7 @@ export interface Env {
   SIGNAL_SOURCE_CHAT_ID?: string;
   MEDIA_PUBLIC_SOURCE_USERNAME?: string;
   FREEMIUM_DAY_UTC_OFFSET_HOURS?: string;
+  MIN_CONFIDENCE_STARS?: string;
 }
 
 export interface Config {
@@ -82,6 +83,8 @@ export interface Config {
   signalSourceChatId: number | null;
   mediaPublicSourceUsername: string;
   freemiumDayOffsetHours: number;
+  /** Signals rated below this (or unrated) are not forwarded. 0 = forward all. */
+  minConfidenceStars: number;
 }
 
 function parseMode(raw: string | undefined): FlowMode {
@@ -109,6 +112,7 @@ export function loadConfig(env: Env): Config {
     for (const f of Object.keys(modes) as Flow[]) if (modes[f] === 'test') modes[f] = 'off';
   }
   const offset = Number(env.FREEMIUM_DAY_UTC_OFFSET_HOURS ?? '1');
+  const minStars = Number(env.MIN_CONFIDENCE_STARS ?? '3');
   return {
     modes,
     testChatId,
@@ -118,6 +122,8 @@ export function loadConfig(env: Env): Config {
     signalSourceChatId: parseChatId(env.SIGNAL_SOURCE_CHAT_ID),
     mediaPublicSourceUsername: (env.MEDIA_PUBLIC_SOURCE_USERNAME ?? 'freemiumtradeideas').replace(/^@/, '').trim(),
     freemiumDayOffsetHours: Number.isFinite(offset) ? offset : 1,
+    // A typo must not silently open the filter: anything unparseable means 3.
+    minConfidenceStars: Number.isFinite(minStars) && minStars >= 0 ? minStars : 3,
   };
 }
 

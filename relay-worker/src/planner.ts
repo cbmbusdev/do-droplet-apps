@@ -18,7 +18,7 @@ import {
   dayKey,
   languageByPremiumChat,
 } from './config';
-import { buildEnglishHtml, buildTranslationSourceHtml, isSignal } from './signals';
+import { buildEnglishHtml, buildTranslationSourceHtml, confidenceStars, isSignal } from './signals';
 import type { TgChannelPost } from './telegram';
 
 function modeOf(cfg: Config, flow: Flow): 'test' | 'live' | null {
@@ -26,8 +26,21 @@ function modeOf(cfg: Config, flow: Flow): 'test' | 'live' | null {
   return m === 'off' ? null : m;
 }
 
+/** Why a post is not forwarded as a signal, or null if it should be. */
+export function signalRejection(cfg: Config, text: string): string | null {
+  if (!isSignal(text)) return 'not_a_signal';
+  if (cfg.minConfidenceStars > 0) {
+    const stars = confidenceStars(text);
+    if (stars === null) return 'no_confidence_rating';
+    if (stars < cfg.minConfidenceStars) return `confidence_${stars}_below_${cfg.minConfidenceStars}`;
+  }
+  return null;
+}
+
 /**
  * Signal post from @EN4XC (either source path) → premium channels.
+ * Only signals rated MIN_CONFIDENCE_STARS or higher are forwarded
+ * (checked before any translation, so filtered posts cost nothing).
  * Behaviour kept from the old bots: English and French always get the
  * signal; the other 18 languages only when it carries a chart link
  * (updated_app2 returned early without one).
@@ -39,7 +52,7 @@ export function planSignal(
   link: string | null,
 ): SendJob[] {
   const mode = modeOf(cfg, 'signals');
-  if (!mode || !isSignal(text)) return [];
+  if (!mode || signalRejection(cfg, text) !== null) return [];
   const freemiumOn = cfg.modes.freemium !== 'off';
   return LANGUAGES.filter((l) => link || ALWAYS_SIGNAL_KEYS.has(l.key)).map((l) => ({
     key: `${mode}:sig:${sourceKey}:${l.key}`,

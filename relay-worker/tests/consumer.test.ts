@@ -76,7 +76,7 @@ function setup(vars: Partial<Env> = {}) {
   return { db, tg, queued, deps, cfg, advance: (ms: number) => (now += ms) };
 }
 
-const SIGNAL = '📉 [Sell Limit] GBPUSDxx - Bearish\nMarket Chart';
+const SIGNAL = '📉 [Sell Limit] GBPUSDxx - Bearish\nConfidence: ⭐⭐⭐\nMarket Chart';
 const signalJob = (cfg: ReturnType<typeof loadConfig>, lang: string) =>
   planSignal(cfg, 'EN4XC/1', SIGNAL, 'https://c.example/a.png').find((j) => j.lang === lang)!;
 
@@ -85,7 +85,7 @@ test('a live translated signal is sent to the real premium channel', async () =>
   const out = await processJob(s.deps, s.cfg, signalJob(s.cfg, 'fr'), 1);
   assert.equal(out.kind, 'sent');
   assert.equal(s.tg.calls[0].chat, -1001727546393);
-  assert.ok(s.tg.calls[0].body.startsWith('[fr] 📉 [Sell Limit] GBPUSD - Bearish\n<a href="https://c.example/a.png">'));
+  assert.ok(s.tg.calls[0].body.startsWith('[fr] 📉 [Sell Limit] GBPUSD - Bearish\nConfidence: ⭐⭐⭐\n<a href="https://c.example/a.png">'));
 });
 
 test('test mode redirects to TEST_CHAT_ID with a banner naming the real target', async () => {
@@ -265,4 +265,14 @@ test('/health reports the flow modes', async () => {
   const body = (await r.json()) as { modes: Record<string, string> };
   assert.equal(body.modes.signals, 'live');
   assert.equal(body.modes.freemium, 'test');
+});
+
+test('web polling skips a 2-star signal but still moves past it', async () => {
+  const { env, batches, db } = workerEnv();
+  await pollSignalWeb(env, page.replace('data-post="EN4XC/102"', 'data-post="EN4XC/99"'));
+  const twoStar = page.replace('<i class="emoji"><b>⭐</b></i><i class="emoji"><b>⭐</b></i><i class="emoji"><b>⭐</b></i>', '<i class="emoji"><b>⭐</b></i><i class="emoji"><b>⭐</b></i>');
+  assert.notEqual(twoStar, page);
+  assert.equal(await pollSignalWeb(env, twoStar), 0);
+  assert.equal(batches.length, 0);
+  assert.equal(await db.prepare('SELECT v FROM kv').first('v'), '102');
 });

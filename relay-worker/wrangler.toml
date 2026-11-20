@@ -1,7 +1,11 @@
 name = "fti-relay"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
-# Set this to your Cloudflare account id if you have more than one account.
+# Deploy into one of your EXISTING Workers Paid accounts — the $5/month
+# plan covers any number of Workers per account, so this adds no
+# subscription. With more than one account, wrangler needs to know which:
+# paste its id (Cloudflare dashboard → Workers & Pages → Account ID, or
+# `npx wrangler whoami`).
 # account_id = ""
 
 # Every minute: read @EN4XC's public web preview for new signals.
@@ -56,6 +60,11 @@ SIGNAL_SOURCE_MODE = "web"
 SIGNAL_SOURCE_USERNAME = "EN4XC"
 # Only needed in "bot" mode if the channel has no public username.
 SIGNAL_SOURCE_CHAT_ID = ""
+
+# Only forward signals rated at least this many stars ("Confidence: ⭐⭐⭐").
+# Lower-rated and unrated signals are dropped before any translation, so
+# they cost nothing. "0" forwards every signal.
+MIN_CONFIDENCE_STARS = "3"
 
 # Public channel whose media is translated out to the 19 public language channels.
 MEDIA_PUBLIC_SOURCE_USERNAME = "freemiumtradeideas"

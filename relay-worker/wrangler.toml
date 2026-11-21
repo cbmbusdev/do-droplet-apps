@@ -40,10 +40,10 @@ enabled = true
 # test = everything goes to TEST_CHAT_ID with a 🧪 banner naming the real
 # destination. Flip one flow to "live" at a time, and stop the matching
 # Droplet container at the same moment (see README "Cutover").
-FLOW_SIGNALS = "test"          # was updated_app1 + updated_app2
-FLOW_MEDIA_PRIVATE = "test"    # was media_forward_private
-FLOW_MEDIA_PUBLIC = "test"     # was media_forward
-FLOW_FREEMIUM = "test"         # was freemium
+FLOW_SIGNALS = "live"          # was updated_app1 + updated_app2
+FLOW_MEDIA_PRIVATE = "live"    # was media_forward_private
+FLOW_MEDIA_PUBLIC = "live"     # was media_forward
+FLOW_FREEMIUM = "live"         # was freemium
 
 # A private channel of your own with the bot as admin. Find its id in the
 # logs ("unrouted_channel_post") after posting anything in it. While this

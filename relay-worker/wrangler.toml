@@ -48,10 +48,10 @@ FLOW_FREEMIUM = "test"         # was freemium
 # A private channel of your own with the bot as admin. Find its id in the
 # logs ("unrouted_channel_post") after posting anything in it. While this
 # is empty, every flow set to "test" behaves as "off".
-TEST_CHAT_ID = ""
+TEST_CHAT_ID = "-1004449988244"   # private channel "FTI Relay"
 
 # Optional: a chat where the bot reports deliveries that failed for good.
-ALERT_CHAT_ID = ""
+ALERT_CHAT_ID = "-1004449988244"  # same channel
 
 # ---- Signal source (@EN4XC) ----
 # "web" — read https://t.me/s/EN4XC every minute (bot needs no access; up to ~60 s delay).

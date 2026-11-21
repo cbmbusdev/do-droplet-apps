@@ -1,0 +1,14 @@
+# The "Freemium Trade Ideas" link page (was the `linktree` nginx container).
+# Static files only — no Worker code runs.
+name = "fti-linktree"
+compatibility_date = "2026-11-01"
+account_id = "87718534e46dcb3756a962702054df15"
+
+[assets]
+directory = "./public"
+not_found_handling = "404-page"
+
+# To serve it on your domain, uncomment and set the hostname (the zone must
+# be on Cloudflare). Remove the matching Proxy Host from the Droplet's
+# nginx-proxy-manager when you switch DNS.
+# routes = [{ pattern = "links.example.com", custom_domain = true }]

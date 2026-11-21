@@ -1,0 +1,88 @@
+name = "fti-relay"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+# Deploy into one of your EXISTING Workers Paid accounts — the $5/month
+# plan covers any number of Workers per account, so this adds no
+# subscription. With more than one account, wrangler needs to know which:
+# paste its id (Cloudflare dashboard → Workers & Pages → Account ID, or
+# `npx wrangler whoami`).
+account_id = "87718534e46dcb3756a962702054df15"  # Affiliate@crystalballmarkets.com's Account (Workers Paid)
+
+# Every minute: read @EN4XC's public web preview for new signals.
+# 03:17 UTC run also prunes bookkeeping older than 30 days.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fti_relay"
+# Replace with the id printed by:  npx wrangler d1 create fti_relay
+database_id = "6cb31966-59d2-4aed-9f39-d10c53c1e218"
+migrations_dir = "migrations"
+
+# One message per (post, channel). Retries honour Telegram's retry_after.
+[[queues.producers]]
+binding = "SEND_QUEUE"
+queue = "fti-relay-sends"
+
+[[queues.consumers]]
+queue = "fti-relay-sends"
+max_batch_size = 10
+max_batch_timeout = 1
+max_retries = 10
+max_concurrency = 5
+
+[observability]
+enabled = true
+
+[vars]
+# ---- Per-flow switches: "off" | "test" | "live" ----
+# test = everything goes to TEST_CHAT_ID with a 🧪 banner naming the real
+# destination. Flip one flow to "live" at a time, and stop the matching
+# Droplet container at the same moment (see README "Cutover").
+FLOW_SIGNALS = "live"          # was updated_app1 + updated_app2
+FLOW_MEDIA_PRIVATE = "live"    # was media_forward_private
+FLOW_MEDIA_PUBLIC = "live"     # was media_forward
+FLOW_FREEMIUM = "live"         # was freemium
+
+# A private channel of your own with the bot as admin. Find its id in the
+# logs ("unrouted_channel_post") after posting anything in it. While this
+# is empty, every flow set to "test" behaves as "off".
+TEST_CHAT_ID = "-1004449988244"   # private channel "FTI Relay"
+
+# Optional: a chat where the bot reports deliveries that failed for good.
+ALERT_CHAT_ID = "-1004449988244"  # same channel
+
+# ---- Signal source (@EN4XC) ----
+# "web" — read https://t.me/s/EN4XC every minute (bot needs no access; up to ~60 s delay).
+# "bot" — the channel owner has added the bot as an admin; posts arrive instantly by webhook.
+SIGNAL_SOURCE_MODE = "web"
+SIGNAL_SOURCE_USERNAME = "EN4XC"
+# Only needed in "bot" mode if the channel has no public username.
+SIGNAL_SOURCE_CHAT_ID = ""
+
+# Only forward signals rated at least this many stars ("Confidence: ⭐⭐⭐").
+# Lower-rated and unrated signals are dropped before any translation, so
+# they cost nothing. "0" forwards every signal.
+MIN_CONFIDENCE_STARS = "3"
+
+# Hard cap on characters sent to Google Translate per billing month
+# (US Pacific calendar month). Google's free tier is 500,000; this stays
+# 10% under it. Lines are cached, so each sentence is paid for once per
+# language; when the cap is reached, sentences not yet cached stay in
+# English until the next month and an alert is sent. Nothing is billed.
+TRANSLATE_MONTHLY_CHAR_BUDGET = "450000"
+
+# Public channel whose media is translated out to the 19 public language channels.
+MEDIA_PUBLIC_SOURCE_USERNAME = "freemiumtradeideas"
+
+# The freemium teaser allows one forward per language per calendar day in
+# this UTC offset. The old bot used pytz "Etc/GMT+1", which is UTC-1 (POSIX
+# signs are inverted), so its day rolled over at 01:00 UTC. Set "-1" to keep
+# that exactly; "1" (default) rolls over at midnight UTC+1 (23:00 UTC).
+FREEMIUM_DAY_UTC_OFFSET_HOURS = "1"
+
+# Secrets — set with `npx wrangler secret put NAME`, never in this file:
+#   TELEGRAM_BOT_TOKEN        from @BotFather
+#   TELEGRAM_WEBHOOK_SECRET   any long random string (also given to setWebhook)
+#   GOOGLE_TRANSLATE_API_KEY  Google Cloud API key restricted to the Cloud Translation API
